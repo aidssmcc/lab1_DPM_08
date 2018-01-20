@@ -11,9 +11,10 @@ public class WallFollowingLab {
 
   // Parameters: adjust these for desired performance
 
-  private static final int bandCenter = 20; // Offset from the wall (cm)
-  private static final int bandWidth = 3; // Width of dead band (cm)
-  private static final int motorLow = 100; // Speed of slower rotating wheel (deg/sec)
+  private static final int bandCenter = 30; // Offset from the wall (cm)
+  private static final int bandWidth = 5; // Width of dead band (cm)
+  private static final int motorLow = 120; // Speed of slower rotating wheel (deg/sec)
+  private static final int motorMed = 100; // Speed of slower rotating wheel (deg/sec)
   private static final int motorHigh = 200; // Speed of the faster rotating wheel (deg/seec)
 
 
@@ -35,7 +36,7 @@ public class WallFollowingLab {
     // Setup controller objects
 
     BangBangController bangbangController =
-        new BangBangController(bandCenter, bandWidth, motorLow, motorHigh);
+        new BangBangController(bandCenter, bandWidth, motorLow, motorHigh, motorMed);
 
     PController pController = new PController(bandCenter, bandWidth);
 
