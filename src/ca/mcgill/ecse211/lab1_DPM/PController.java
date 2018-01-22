@@ -7,7 +7,14 @@ public class PController implements UltrasonicController {
   /* Constants */
   private static final int MOTOR_SPEED = 200;
   private static final int FILTER_OUT = 20;
+  private static final int MIN_SPEED = 75;
+  private static final int OFFSET = 10;
 
+  private int thresh = 255;
+  private int cooldown = 0;
+  private int moveAway = 100;
+  private float cornerOffset = 1 / 3;	//less than 1. 1/3 means turning for 1/3 of time in corner mode
+  
   private final int bandCenter;
   private final int bandWidth;
   private int distance;
@@ -20,8 +27,8 @@ public class PController implements UltrasonicController {
 
     WallFollowingLab.leftMotor.setSpeed(MOTOR_SPEED); // Initalize motor rolling forward
     WallFollowingLab.rightMotor.setSpeed(MOTOR_SPEED);
-    WallFollowingLab.leftMotor.forward();
-    WallFollowingLab.rightMotor.forward();
+    WallFollowingLab.leftMotor.backward();
+    WallFollowingLab.rightMotor.backward();
   }
 
   @Override
@@ -47,9 +54,98 @@ public class PController implements UltrasonicController {
       this.distance = distance;
     }
 
-    // TODO: process a movement based on the us distance passed in (P style)
+    if (Math.abs(distance - this.bandCenter) < this.bandWidth) {
+    	//if in the right zone
+ 		WallFollowingLab.leftMotor.setSpeed(MOTOR_SPEED);
+ 		WallFollowingLab.rightMotor.setSpeed(MOTOR_SPEED);
+ 		WallFollowingLab.leftMotor.backward();
+ 		WallFollowingLab.rightMotor.backward();
+    } else if (distance > this.thresh) {
+    	if (this.cooldown == 0) {
+    		this.cooldown = this.moveAway;
+    	} else if (this.cooldown > (this.moveAway * cornerOffset)) {
+        	//drive forward
+    		WallFollowingLab.leftMotor.setSpeed(MOTOR_SPEED);
+    		WallFollowingLab.rightMotor.setSpeed(MOTOR_SPEED);
+    		WallFollowingLab.leftMotor.backward();
+    		WallFollowingLab.rightMotor.backward();
+    		
+    	} else {
+    		//then turn sharply
+     		WallFollowingLab.leftMotor.setSpeed(propCalc(distance, true));
+     		WallFollowingLab.rightMotor.setSpeed(propCalc(distance, false));
+     		WallFollowingLab.leftMotor.backward();
+     		WallFollowingLab.rightMotor.backward();
+    	}
+    	cooldown--;
+    	
+  	}else {
+ 		WallFollowingLab.leftMotor.setSpeed(propCalc(distance, true));
+ 		WallFollowingLab.rightMotor.setSpeed(propCalc(distance, false));
+ 		WallFollowingLab.leftMotor.backward();
+ 		WallFollowingLab.rightMotor.backward();
+    }
   }
 
+  /**
+   * Helper function calculates the speed a motor should be running at
+   * @param dist Current distance from the wall
+   * @param lOrR Select calculation for left (true) or right (false) motor
+   * @return speed New speed of the motor
+   */
+  private int propCalc(int dist, boolean lOrR) {
+	  int ratio = Math.abs(dist - this.bandCenter);
+	  int speed;
+	  if (ratio == 0) {
+		  //if at right distance, go full speed for either motor
+		  return MOTOR_SPEED;
+	  }
+	  
+	  if (ratio > this.bandCenter) {
+		  //cap ratio size to that of bandCenter
+		  ratio = this.bandCenter;
+	  }
+	  	  
+	  int adjust = MOTOR_SPEED * (ratio / this.bandCenter) + OFFSET;	
+	  if (adjust > MOTOR_SPEED) {
+		  adjust = MOTOR_SPEED;
+	  }
+
+	  if(dist  < (this.bandCenter)) {
+		  //too close to wall
+		  //left to go fast
+		  //right go slow
+		  if (lOrR) {
+			  if (adjust < MIN_SPEED) {
+				  return MIN_SPEED;
+			  }
+			  return adjust;
+		  } else {
+			  speed = MOTOR_SPEED - adjust;
+			  if (speed < MIN_SPEED) {
+				  return MIN_SPEED;
+			  }
+			  return speed;
+		  }
+	  } else {
+		  //too far from wall
+		  //right to go fast
+		  //left go slow
+
+		  if (lOrR) {
+			  if (adjust < MIN_SPEED) {
+				  return MIN_SPEED;
+			  }
+			  return adjust;
+		  } else {
+			  speed = MOTOR_SPEED - adjust;
+			  if (speed < MIN_SPEED) {
+				  return MIN_SPEED;
+			  }
+			  return speed;
+		  }	  
+	  }
+  }
 
   @Override
   public int readUSDistance() {
