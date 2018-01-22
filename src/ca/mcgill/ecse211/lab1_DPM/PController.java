@@ -6,11 +6,13 @@ public class PController implements UltrasonicController {
 
   /* Constants */
   private static final int MOTOR_SPEED = 200;
-  private static final int FILTER_OUT = 20;
-  private static final int MIN_SPEED = 75;
-  private static final int OFFSET = 10;
-
-  private int thresh = 255;
+  private static final int FILTER_OUT = 40;	//30
+  private static final int MIN_SPEED = 140;
+  private static final int P_OFFSET = 10;
+  private static final int OUTSIDE_RAT_NUM = 2;	//2 previous values that worked
+  private static final int OUTSIDE_RAT_DEN = 3;	//3
+  private static final int RATIO_MULTIPLIER = 2;
+  private static final int THRESH = 60;
   private int cooldown = 0;
   private int moveAway = 100;
   private float cornerOffset = 1 / 3;	//less than 1. 1/3 means turning for 1/3 of time in corner mode
@@ -53,97 +55,143 @@ public class PController implements UltrasonicController {
       filterControl = 0;
       this.distance = distance;
     }
-
-    if (Math.abs(distance - this.bandCenter) < this.bandWidth) {
-    	//if in the right zone
- 		WallFollowingLab.leftMotor.setSpeed(MOTOR_SPEED);
- 		WallFollowingLab.rightMotor.setSpeed(MOTOR_SPEED);
- 		WallFollowingLab.leftMotor.backward();
- 		WallFollowingLab.rightMotor.backward();
-    } else if (distance > this.thresh) {
-    	if (this.cooldown == 0) {
-    		this.cooldown = this.moveAway;
-    	} else if (this.cooldown > (this.moveAway * cornerOffset)) {
-        	//drive forward
-    		WallFollowingLab.leftMotor.setSpeed(MOTOR_SPEED);
-    		WallFollowingLab.rightMotor.setSpeed(MOTOR_SPEED);
-    		WallFollowingLab.leftMotor.backward();
-    		WallFollowingLab.rightMotor.backward();
-    		
-    	} else {
-    		//then turn sharply
-     		WallFollowingLab.leftMotor.setSpeed(propCalc(distance, true));
-     		WallFollowingLab.rightMotor.setSpeed(propCalc(distance, false));
-     		WallFollowingLab.leftMotor.backward();
-     		WallFollowingLab.rightMotor.backward();
-    	}
-    	cooldown--;
-    	
-  	}else {
- 		WallFollowingLab.leftMotor.setSpeed(propCalc(distance, true));
- 		WallFollowingLab.rightMotor.setSpeed(propCalc(distance, false));
- 		WallFollowingLab.leftMotor.backward();
- 		WallFollowingLab.rightMotor.backward();
+    
+    int lSpeed = (propCalc(distance, false));
+    int rSpeed = (propCalc(distance, true));
+    
+    if (lSpeed < 0) {
+    	WallFollowingLab.leftMotor.setSpeed(-1 * lSpeed);
+    	WallFollowingLab.leftMotor.forward();
+    } else {
+    	WallFollowingLab.leftMotor.setSpeed(lSpeed);
+    	WallFollowingLab.leftMotor.backward();
+    }
+    if (rSpeed < 0) {
+    	WallFollowingLab.rightMotor.setSpeed(-1 * rSpeed);
+    	WallFollowingLab.rightMotor.forward();
+    } else {
+    	WallFollowingLab.rightMotor.setSpeed(rSpeed);
+    	WallFollowingLab.rightMotor.backward();
     }
   }
+  
+  /**
+   * Helper function to cap a value
+   * @param value
+   * @param cap
+   * @return capped value if value > cap, returns the cap. Else the value
+   */
+  private int capVal(int value, int cap) {
+	  if (value > cap) {
+		  return cap;
+	  }
+	  return value;
+  }
 
+  /**
+   * Helper function to cap a value to a minimum
+   * @param value
+   * @param cap
+   * @return capped value if value < cap, returns the cap. Else the value
+   */
+  private int minCapVal(int value, int cap) {
+	  if (value < cap) {
+		  return cap;
+	  }
+	  return value;
+  }
+  
   /**
    * Helper function calculates the speed a motor should be running at
    * @param dist Current distance from the wall
    * @param lOrR Select calculation for left (true) or right (false) motor
-   * @return speed New speed of the motor
+   * @return speed New speed of the motor. Returning a negative value would
+   * mean that the motor should run in the reverse direction
    */
   private int propCalc(int dist, boolean lOrR) {
-	  int ratio = Math.abs(dist - this.bandCenter);
+	  int ratio = dist - bandCenter;	//distance from center
 	  int speed;
-	  if (ratio == 0) {
-		  //if at right distance, go full speed for either motor
+	  
+	  if (Math.abs(ratio) < bandWidth) {
+		  //goldilocks zone
 		  return MOTOR_SPEED;
 	  }
-	  
-	  if (ratio > this.bandCenter) {
-		  //cap ratio size to that of bandCenter
-		  ratio = this.bandCenter;
-	  }
-	  	  
-	  int adjust = MOTOR_SPEED * (ratio / this.bandCenter) + OFFSET;	
-	  if (adjust > MOTOR_SPEED) {
-		  adjust = MOTOR_SPEED;
-	  }
-
-	  if(dist  < (this.bandCenter)) {
+	  if (ratio < (-1 * P_OFFSET)) {
 		  //too close to wall
-		  //left to go fast
-		  //right go slow
-		  if (lOrR) {
-			  if (adjust < MIN_SPEED) {
-				  return MIN_SPEED;
-			  }
-			  return adjust;
+		  if(lOrR) {
+			  //left motor
+			  return MOTOR_SPEED;
 		  } else {
-			  speed = MOTOR_SPEED - adjust;
-			  if (speed < MIN_SPEED) {
-				  return MIN_SPEED;
-			  }
+			  //right motor
+			  //reverse
+			  speed = MOTOR_SPEED * ratio / bandCenter ;
+			  speed = minCapVal(speed, -1 * MIN_SPEED);
 			  return speed;
 		  }
-	  } else {
-		  //too far from wall
-		  //right to go fast
-		  //left go slow
-
-		  if (lOrR) {
-			  if (adjust < MIN_SPEED) {
-				  return MIN_SPEED;
-			  }
-			  return adjust;
+		  
+	  } else if (ratio < 0) {
+		  //Near zone but still not close
+		  if(lOrR) {
+			  //left
+			  return MOTOR_SPEED;
 		  } else {
-			  speed = MOTOR_SPEED - adjust;
-			  if (speed < MIN_SPEED) {
-				  return MIN_SPEED;
-			  }
+			  //right
+			  speed = MOTOR_SPEED / ratio * -1;
+			  speed = minCapVal(speed, MIN_SPEED);
 			  return speed;
-		  }	  
+		  }
+		  
+	  } else if(ratio > THRESH) {
+		  //robot cannot see wall
+//		  if (this.cooldown <= 0) {
+//			  this.cooldown = this.moveAway;
+//		  }
+//		  if (this.cooldown > (this.moveAway * cornerOffset)) {
+//	        	//drive forward for some time
+//			  return MOTOR_SPEED;
+//		  } else {
+		  
+		  
+		  if(lOrR) {
+			  //left
+			  return MOTOR_SPEED * OUTSIDE_RAT_NUM / OUTSIDE_RAT_DEN;
+		  } else {
+			  //right
+			  return MOTOR_SPEED;  
+		  }
+		  
+		  
+//		  }
+//		  cooldown--;
+		  
+	  } else if(ratio > P_OFFSET) {
+		  //far away from wall, but still sees it
+		  if(lOrR) {
+			  //left motor
+			  ratio = capVal(ratio, bandWidth);
+			  
+//			  speed = MOTOR_SPEED * ratio / bandWidth * -1;
+//			  speed = capVal(speed, -1 * MIN_SPEED);
+			  
+			  speed = MOTOR_SPEED * RATIO_MULTIPLIER / ratio;
+			  speed = minCapVal(speed, MIN_SPEED);
+			  return speed;
+		  } else {
+			  //right motor
+			  return MOTOR_SPEED;
+		  }
+		  
+	  } else {
+		  //close to center, ratio positive
+		  if(lOrR) {
+			  //left
+			  speed = MOTOR_SPEED * RATIO_MULTIPLIER / ratio;
+			  speed = minCapVal(speed, MIN_SPEED);
+			  return speed;
+		  } else {
+			  //right
+			  return MOTOR_SPEED;
+		  }
 	  }
   }
 
