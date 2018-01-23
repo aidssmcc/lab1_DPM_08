@@ -1,4 +1,4 @@
-package ca.mcgill.ecse211.lab1_DPM;
+package ca.mcgill.ecse211.lab1;
 
 import lejos.hardware.motor.*;
 
@@ -11,7 +11,7 @@ public class BangBangController implements UltrasonicController {
   private int distance;
   private int thresh = 60;
   private int cooldown = 0;
-  private int moveAway = 100;
+  private int moveAway = 90;
 
   public BangBangController(int bandCenter, int bandwidth, int motorLow, int motorHigh) {
     // Default Constructor
@@ -41,25 +41,30 @@ public class BangBangController implements UltrasonicController {
    	 	WallFollowingLab.leftMotor.forward();
    	 	WallFollowingLab.rightMotor.backward();
     } else if (distance > this.thresh) {
+    	//wall not in sight
     	if (this.cooldown == 0) {
+    		//Go into a corner mode. 
     		this.cooldown = this.moveAway;
     	} else if (this.cooldown > 20) {
+    		//stage 1 of corner mode
         	//drive forward
     		WallFollowingLab.leftMotor.setSpeed(motorHigh);
     		WallFollowingLab.rightMotor.setSpeed(motorHigh);
     		WallFollowingLab.leftMotor.backward();
     		WallFollowingLab.rightMotor.backward();
     	} else {
-    		//then turn sharply
+    		//stage 2 of corner mode
+    		//turn sharply
    	 		WallFollowingLab.leftMotor.setSpeed(motorHigh);
    	 		WallFollowingLab.rightMotor.setSpeed(motorHigh);
    	 		WallFollowingLab.leftMotor.backward();
    	 		WallFollowingLab.rightMotor.forward();
     	}
+    	//reduce timer on corner mode
     	cooldown--;
     }
     else {
-    	//too far from wall
+    	//too far from wall, wall still in sight
    	 	WallFollowingLab.leftMotor.setSpeed(motorHigh);
    	 	WallFollowingLab.rightMotor.setSpeed(motorLow);
    	 	WallFollowingLab.leftMotor.backward();

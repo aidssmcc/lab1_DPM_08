@@ -1,22 +1,20 @@
-package ca.mcgill.ecse211.lab1_DPM;
+package ca.mcgill.ecse211.lab1;
 
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 
 public class PController implements UltrasonicController {
 
   /* Constants */
-  private static final int MOTOR_SPEED = 200;
-  private static final int FILTER_OUT = 40;	//30
+  private static final int MOTOR_SPEED = 300;
+  private static final int FILTER_OUT = 20;
   private static final int MIN_SPEED = 140;
   private static final int P_OFFSET = 10;
-  private static final int OUTSIDE_RAT_NUM = 2;	//2 previous values that worked
-  private static final int OUTSIDE_RAT_DEN = 3;	//3
   private static final int RATIO_MULTIPLIER = 2;
   private static final int THRESH = 60;
-  private int cooldown = 0;
-  private int moveAway = 100;
-  private float cornerOffset = 1 / 3;	//less than 1. 1/3 means turning for 1/3 of time in corner mode
-  
+  private static final int CORNER_TURN = 47;
+  private static final int CORNER_MAX = 170;
+
+  private int cornerMode = 0;
   private final int bandCenter;
   private final int bandWidth;
   private int distance;
@@ -110,20 +108,23 @@ public class PController implements UltrasonicController {
    */
   private int propCalc(int dist, boolean lOrR) {
 	  int ratio = dist - bandCenter;	//distance from center
-	  int speed;
+	  int speed;	//speed used later to hold proportion from MOTOR_SPEED
 	  
 	  if (Math.abs(ratio) < bandWidth) {
 		  //goldilocks zone
 		  return MOTOR_SPEED;
 	  }
+	  
+	  //various cases the robot can be in
 	  if (ratio < (-1 * P_OFFSET)) {
 		  //too close to wall
+		  
 		  if(lOrR) {
 			  //left motor
 			  return MOTOR_SPEED;
 		  } else {
 			  //right motor
-			  //reverse
+			  //reverse direction
 			  speed = MOTOR_SPEED * ratio / bandCenter ;
 			  speed = minCapVal(speed, -1 * MIN_SPEED);
 			  return speed;
@@ -141,37 +142,36 @@ public class PController implements UltrasonicController {
 			  return speed;
 		  }
 		  
-	  } else if(ratio > THRESH) {
+	  } 
+	  else if(ratio > THRESH) {
 		  //robot cannot see wall
-//		  if (this.cooldown <= 0) {
-//			  this.cooldown = this.moveAway;
-//		  }
-//		  if (this.cooldown > (this.moveAway * cornerOffset)) {
-//	        	//drive forward for some time
-//			  return MOTOR_SPEED;
-//		  } else {
+		  //special case causes robot to enter a corner mode
 		  
-		  
-		  if(lOrR) {
-			  //left
-			  return MOTOR_SPEED * OUTSIDE_RAT_NUM / OUTSIDE_RAT_DEN;
+		  if(cornerMode > CORNER_TURN) {
+			  //stage 1 of corner mode
+			  //go straight
+			  cornerMode--;
+			  return MOTOR_SPEED;
+		  } else if (cornerMode > 0) {
+			  //stage 2 of corner mode
+			  //turn for a while, determined by CORNER_TURN
+			  cornerMode--;
+			  if(lOrR) {
+				  return (-1 * MOTOR_SPEED);
+			  } else {
+				  return MOTOR_SPEED;
+			  }
 		  } else {
-			  //right
-			  return MOTOR_SPEED;  
+			  //at a corner and cornerMode inactive, activate it
+			  cornerMode = CORNER_MAX;
+			  return MOTOR_SPEED;
 		  }
-		  
-		  
-//		  }
-//		  cooldown--;
 		  
 	  } else if(ratio > P_OFFSET) {
 		  //far away from wall, but still sees it
 		  if(lOrR) {
 			  //left motor
 			  ratio = capVal(ratio, bandWidth);
-			  
-//			  speed = MOTOR_SPEED * ratio / bandWidth * -1;
-//			  speed = capVal(speed, -1 * MIN_SPEED);
 			  
 			  speed = MOTOR_SPEED * RATIO_MULTIPLIER / ratio;
 			  speed = minCapVal(speed, MIN_SPEED);
